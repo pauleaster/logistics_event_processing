@@ -121,31 +121,37 @@ logistics_event_processing/
 2. Set up RabbitMQ Docker container.
 3. Confirm Oracle container starts and can be restarted.
 4. Confirm RabbitMQ container starts and the management UI is accessible.
-5. Define synthetic logistics event schema.
+5. Define synthetic GPS event schema.
 6. Create sample valid and invalid JSONL event files.
-7. Write integration-test expectations first.
-8. Add RabbitMQ producer/consumer flow using `pika`.
-9. Implement Pydantic validation.
-10. Implement transformation logic.
-11. Create Oracle schema.
-12. Create Oracle PL/SQL package.
-13. Implement Python Oracle repository using `python-oracledb`.
-14. Add error handling and rejected-record path.
-15. Add archive logic.
-16. Add logging.
-17. Add pandas summary report.
-18. Add pytest unit tests.
-19. Add pytest integration tests.
-20. Add Docker Compose if stable.
-21. Write README run commands.
-22. Build `presentation.md` in parallel.
+7. Create Oracle schema.
+8. Create Oracle seed data.
+9. Create Oracle PL/SQL package.
+10. Commit and push initial infrastructure/database setup.
+11. Write failing happy-path integration tests for the Python-to-Oracle path.
+12. Implement Pydantic GPS event validation.
+13. Implement transformation logic.
+14. Implement Python Oracle repository using `python-oracledb`.
+15. Make the Python-to-Oracle happy-path integration tests pass.
+16. Add structured logging for accepted and rejected events.
+17. Add error handling for invalid payloads and PL/SQL/database errors.
+18. Add RabbitMQ producer using `pika`.
+19. Add RabbitMQ consumer using `pika`.
+20. Connect consumer -> validation -> transformation -> Oracle repository.
+21. Add pytest unit tests for validator, transformer, and repository behaviour, covering happy paths and edge cases.
+22. Add additional pytest integration tests only where real Oracle behaviour needs to be verified.
+23. Add end-to-end happy-path test for sample JSONL -> RabbitMQ -> consumer -> Oracle.
+24. Add pandas summary report.
+25. Update README run commands.
+26. Update `presentation.md` in parallel.
 
 ## Testing approach
 
 - Unit tests should not require Oracle or RabbitMQ.
+- Unit tests should cover both happy paths and edge cases.
+- All unit tests should pass before relying on integration test results.
 - Integration tests can require Oracle and RabbitMQ.
 - Mark Oracle-dependent and RabbitMQ-dependent tests clearly.
-- The application is complete when the end-to-end integration test passes.
+- The application is complete when all unit tests pass and the end-to-end integration test passes.
 
 ## Presentation notes
 
