@@ -1,0 +1,169 @@
+# Logistics Event Processing: Implementation and Setup Notes
+
+## Development environment
+
+- Develop in WSL Ubuntu.
+- Keep the project under the WSL filesystem, not `/mnt/c`.
+- Use VS Code Remote WSL.
+- Use Docker Desktop with WSL integration enabled.
+- Use Windows only for GUI tools, browser testing, and presentation editing.
+
+## Disk-space notes
+
+- Ubuntu WSL VHDX observed size: ~64 GB.
+- Docker data VHDX observed size: ~48 GB.
+- C: free space observed: ~71 GB.
+- Oracle and RabbitMQ should be run in Docker rather than installed directly into WSL.
+- Avoid installing Oracle both directly in WSL and in Docker.
+
+## Docker cleanup before Oracle and RabbitMQ setup
+
+Run before pulling/building Oracle or RabbitMQ images:
+
+```bash
+docker system df
+docker image prune
+docker system df
+```
+
+Avoid aggressive cleanup unless old images are definitely no longer needed.
+
+## Oracle setup approach
+
+- Use Oracle in Docker / Docker Compose on the local development PC.
+- Oracle is the required database layer for the full application.
+- Keep the Python app separate from the Oracle database container.
+- Keep Oracle startup scripted and repeatable.
+- Keep schema creation scripted.
+- Keep PL/SQL package compilation scripted.
+- Keep sample-data loading scripted.
+- The expected full application path is: start Oracle, apply schema, compile PL/SQL, load sample data, run Python pipeline, run integration tests.
+
+## Oracle runtime strategy
+
+- Primary target: Python app calling working Oracle PL/SQL.
+- The full application expects Oracle to be running.
+- Integration tests must confirm that Python can connect to Oracle and call the PL/SQL package successfully.
+- Unit tests for validation and transformation can run without Oracle.
+- Keep synthetic data small enough to inspect manually.
+- Keep saved sample output only for quick presentation reference, not as a replacement for the live local runtime.
+
+## RabbitMQ setup approach
+
+- Use RabbitMQ in Docker / Docker Compose on the local development PC.
+- RabbitMQ is the message queue layer for the producer/consumer event flow.
+- Keep the Python app separate from the RabbitMQ container.
+- Use RabbitMQ to demonstrate asynchronous messaging and real-time-style event reception.
+- Initial setup starts with Oracle and RabbitMQ Docker containers, then the Python producer/consumer pipeline is built on top.
+
+## Suggested project structure
+
+```text
+logistics_event_processing/
+  app/
+    __init__.py
+    main.py
+    producer.py
+    consumer.py
+    rabbitmq_config.py
+    validator.py
+    transformer.py
+    oracle_repository.py
+    reporting.py
+    logging_config.py
+
+  oracle/
+    schema.sql
+    package.sql
+    seed.sql
+    reset.sql
+
+  sample_data/
+    incoming_events.jsonl
+    invalid_events.jsonl
+
+  tests/
+    unit/
+      test_validator.py
+      test_transformer.py
+    integration/
+      test_rabbitmq_connection.py
+      test_oracle_repository.py
+      test_pipeline_end_to_end.py
+
+  reports/
+    .gitkeep
+    processing_summary.csv
+
+  docs/
+    planning/
+      logistics_event_processing_implementation_plan.md
+      logistics_event_processing_implementation_setup_notes.md
+    setup/
+      oracle_docker_install_notes.md
+      oracle_schema_setup.md
+      rabbitmq_docker_install_notes.md
+
+  scripts/
+    password_generator.py
+
+  Dockerfile
+  docker-compose.yml
+  requirements.txt
+  README.md
+  presentation.md
+  set_env_vars.sh
+```
+
+## Implementation order
+
+1. Set up Oracle Docker container.
+2. Set up RabbitMQ Docker container.
+3. Confirm Oracle container starts and can be restarted.
+4. Confirm RabbitMQ container starts and the management UI is accessible.
+5. Define synthetic logistics event schema.
+6. Create sample valid and invalid JSONL event files.
+7. Write integration-test expectations first.
+8. Add RabbitMQ producer/consumer flow using `pika`.
+9. Implement Pydantic validation.
+10. Implement transformation logic.
+11. Create Oracle schema.
+12. Create Oracle PL/SQL package.
+13. Implement Python Oracle repository using `python-oracledb`.
+14. Add error handling and rejected-record path.
+15. Add archive logic.
+16. Add logging.
+17. Add pandas summary report.
+18. Add pytest unit tests.
+19. Add pytest integration tests.
+20. Add Docker Compose if stable.
+21. Write README run commands.
+22. Build `presentation.md` in parallel.
+
+## Testing approach
+
+- Unit tests should not require Oracle or RabbitMQ.
+- Integration tests can require Oracle and RabbitMQ.
+- Mark Oracle-dependent and RabbitMQ-dependent tests clearly.
+- The application is complete when the end-to-end integration test passes.
+
+## Presentation notes
+
+- Start `presentation.md` early.
+- Keep the presentation aligned with the project.
+- Map each implemented feature to a role requirement.
+- Do not over-present frontend, AI, MCP, or unrelated projects.
+- Focus on data reception, RabbitMQ messaging, validation, transformation, Oracle SQL/PLSQL, logging, archiving, reporting, and testing.
+
+## Local cleanup
+
+After the local development work, remove Oracle and RabbitMQ containers and volumes if no longer needed:
+
+```bash
+docker compose down -v
+docker image prune
+docker volume prune
+docker system df
+```
+
+If Windows disk space is not returned after cleanup, compact Docker/WSL VHDX files later.
