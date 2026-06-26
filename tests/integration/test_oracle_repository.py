@@ -37,10 +37,16 @@ import os
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TypedDict, cast
-from collections.abc import Generator
+from collections.abc import Generator, Callable
+from uuid import uuid4
 
 import oracledb
 import pytest
+
+from app.event_processor import ProcessingStatus, process_gps_payload
+from app.oracle_repository import OracleGpsRepository
+from app.transformer import GpsRecord, transform_gps_event
+from app.validator import validate_gps_event
 
 pytestmark = [pytest.mark.integration, pytest.mark.oracle]
 
@@ -97,6 +103,58 @@ def _required_env(name: str) -> str:
     return value
 
 
+def _make_external_event_id(prefix: str) -> str:
+    return f"{prefix}-{uuid4()}"
+
+
+def _make_event(
+    external_event_id: str,
+    **overrides: object,
+) -> dict[str, object]:
+    payload = dict(VALID_GPS_EVENT)
+    payload["external_event_id"] = external_event_id
+    payload.update(overrides)
+    return payload
+
+
+def _delete_gps_event(
+    connection: oracledb.Connection,
+    *,
+    source_system: object,
+    external_event_id: object,
+) -> None:
+    with connection.cursor() as cursor:
+        cursor.execute(  # pyright: ignore[reportUnknownMemberType]
+            """
+            DELETE FROM gps
+            WHERE source_system = :source_system
+              AND external_event_id = :external_event_id
+            """,
+            {
+                "source_system": str(source_system),
+                "external_event_id": str(external_event_id),
+            },
+        )
+    connection.commit()
+
+
+def _insert_event_via_repository(payload: dict[str, object]) -> None:
+    event = validate_gps_event(payload)
+    record = transform_gps_event(event)
+    repository = OracleGpsRepository()
+    repository.insert_gps_record(record)
+
+
+def _assert_oracle_error_contains(
+    exc: BaseException,
+    *fragments: str,
+) -> None:
+    error_text = str(exc)
+
+    for fragment in fragments:
+        assert fragment in error_text
+
+
 @pytest.fixture()
 def oracle_connection() -> Generator[oracledb.Connection, None, None]:
     connection = oracledb.connect(
@@ -138,6 +196,30 @@ def clean_test_gps_row(
     oracle_connection.commit()
 
 
+@pytest.fixture
+def cleanup_gps_events(
+    oracle_connection: oracledb.Connection,
+) -> Generator[Callable[[dict[str, object]], None], None, None]:
+    payloads: list[dict[str, object]] = []
+
+    def register(payload: dict[str, object]) -> None:
+        payloads.append(payload)
+        _delete_gps_event(
+            oracle_connection,
+            source_system=payload["source_system"],
+            external_event_id=payload["external_event_id"],
+        )
+
+    yield register
+
+    for payload in payloads:
+        _delete_gps_event(
+            oracle_connection,
+            source_system=payload["source_system"],
+            external_event_id=payload["external_event_id"],
+        )
+
+
 def test_valid_gps_event_is_validated_transformed_and_inserted_into_oracle(
     oracle_connection: oracledb.Connection,
 ) -> None:
@@ -148,10 +230,6 @@ def test_valid_gps_event_is_validated_transformed_and_inserted_into_oracle(
     And the row is linked to the correct driver_id and vehicle_id
     And the inserted values match the source event
     """
-
-    from app.oracle_repository import OracleGpsRepository
-    from app.transformer import transform_gps_event
-    from app.validator import validate_gps_event
 
     validated_event = validate_gps_event(dict(VALID_GPS_EVENT))
     gps_crumb_record = transform_gps_event(validated_event)
@@ -239,3 +317,152 @@ def _fetch_inserted_gps_row(
 
 def _to_float(value: float | Decimal | int) -> float:
     return float(value)
+
+
+def test_duplicate_gps_event_is_rejected_by_real_oracle_path(
+    cleanup_gps_events: Callable[[dict[str, object]], None],
+) -> None:
+    payload = _make_event(_make_external_event_id("gps-duplicate"))
+    cleanup_gps_events(payload)
+
+    _insert_event_via_repository(payload)
+
+    with pytest.raises(oracledb.Error) as exc_info:
+        _insert_event_via_repository(payload)
+
+    _assert_oracle_error_contains(
+        exc_info.value,
+        "ORA-20005",
+        "Duplicate GPS event for source_system/external_event_id",
+    )
+
+
+def test_unknown_driver_code_is_rejected_by_plsql_package(
+    cleanup_gps_events: Callable[[dict[str, object]], None],
+) -> None:
+    payload = _make_event(
+        _make_external_event_id("gps-unknown-driver"),
+        driver_code="DRV-UNKNOWN",
+    )
+    cleanup_gps_events(payload)
+
+    with pytest.raises(oracledb.Error) as exc_info:
+        _insert_event_via_repository(payload)
+
+    _assert_oracle_error_contains(
+        exc_info.value,
+        "ORA-20001",
+        "Active driver not found for driver_code",
+    )
+
+
+def test_unknown_vehicle_code_is_rejected_by_plsql_package(
+    cleanup_gps_events: Callable[[dict[str, object]], None],
+) -> None:
+    payload = _make_event(
+        _make_external_event_id("gps-unknown-vehicle"),
+        vehicle_code="VH-UNKNOWN",
+    )
+    cleanup_gps_events(payload)
+
+    with pytest.raises(oracledb.Error) as exc_info:
+        _insert_event_via_repository(payload)
+
+    _assert_oracle_error_contains(
+        exc_info.value,
+        "ORA-20003",
+        "Active vehicle not found for vehicle_code",
+    )
+
+
+def test_real_duplicate_oracle_error_is_classified_by_event_processor(
+    cleanup_gps_events: Callable[[dict[str, object]], None],
+) -> None:
+    payload = _make_event(_make_external_event_id("gps-processor-duplicate"))
+    cleanup_gps_events(payload)
+
+    _insert_event_via_repository(payload)
+
+    repository = OracleGpsRepository()
+    result = process_gps_payload(payload, repository)
+
+    assert result.success is False
+    assert result.status == ProcessingStatus.FAILED_DATABASE
+    assert result.error_type == "DUPLICATE_GPS_EVENT"
+    assert result.should_ack is False
+
+
+def test_real_inactive_driver_is_classified_as_unknown_driver_with_current_plsql_wording(
+    cleanup_gps_events: Callable[[dict[str, object]], None],
+) -> None:
+    payload = _make_event(
+        _make_external_event_id("gps-inactive-driver"),
+        driver_code="DRV4112",
+    )
+    cleanup_gps_events(payload)
+
+    repository = OracleGpsRepository()
+    result = process_gps_payload(payload, repository)
+
+    assert result.success is False
+    assert result.status == ProcessingStatus.FAILED_DATABASE
+    assert result.error_type == "UNKNOWN_DRIVER"
+    assert result.should_ack is False
+    assert result.error_message is not None
+    assert "Active driver not found for driver_code: DRV4112" in result.error_message
+
+
+def test_real_inactive_vehicle_is_classified_as_unknown_vehicle_with_current_plsql_wording(
+    cleanup_gps_events: Callable[[dict[str, object]], None],
+) -> None:
+    payload = _make_event(
+        _make_external_event_id("gps-inactive-vehicle"),
+        vehicle_code="VH-7705",
+    )
+    cleanup_gps_events(payload)
+
+    repository = OracleGpsRepository()
+    result = process_gps_payload(payload, repository)
+
+    assert result.success is False
+    assert result.status == ProcessingStatus.FAILED_DATABASE
+    assert result.error_type == "UNKNOWN_VEHICLE"
+    assert result.should_ack is False
+    assert result.error_message is not None
+    assert "Active vehicle not found for vehicle_code: VH-7705" in result.error_message
+
+
+def test_invalid_latitude_check_constraint_is_enforced_by_real_oracle(
+    cleanup_gps_events: Callable[[dict[str, object]], None],
+) -> None:
+    external_event_id = _make_external_event_id("gps-invalid-latitude")
+    payload = _make_event(external_event_id)
+    cleanup_gps_events(payload)
+
+    event = validate_gps_event(payload)
+    valid_record = transform_gps_event(event)
+
+    invalid_record = GpsRecord(
+        source_system=valid_record.source_system,
+        external_event_id=valid_record.external_event_id,
+        event_timestamp=valid_record.event_timestamp,
+        driver_code=valid_record.driver_code,
+        vehicle_code=valid_record.vehicle_code,
+        latitude=91.0,
+        longitude=valid_record.longitude,
+        speed_kmh=valid_record.speed_kmh,
+        heading_degrees=valid_record.heading_degrees,
+        gps_accuracy_m=valid_record.gps_accuracy_m,
+        battery_level_percent=valid_record.battery_level_percent,
+    )
+
+    repository = OracleGpsRepository()
+
+    with pytest.raises(oracledb.Error) as exc_info:
+        repository.insert_gps_record(invalid_record)
+
+    _assert_oracle_error_contains(
+        exc_info.value,
+        "ORA-02290",
+        "CK_GPS_LATITUDE",
+    )
