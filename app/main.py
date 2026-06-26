@@ -14,6 +14,7 @@ Oracle persistence remains in app.oracle_repository.
 
 from app.consumer import consume_json_events
 from app.event_processor import ProcessingResult, process_gps_payload
+from app.logging_config import configure_logging
 from app.oracle_repository import OracleGpsRepository
 from app.rabbitmq_config import RabbitMqConfig
 
@@ -35,6 +36,7 @@ def main() -> None:
     """
     CLI entry point for `python -m app.main`.
     """
+    configure_logging()
     run()
 
 

@@ -88,6 +88,8 @@ def configure_logging(level: int = logging.INFO) -> None:
         force=True,
     )
 
+    logging.getLogger("pika").setLevel(logging.WARNING)
+
 
 def get_gps_event_logger() -> logging.Logger:
     """Return the logger used for GPS event lifecycle logs."""
