@@ -46,10 +46,31 @@ def test_validate_gps_event_accepts_valid_payload() -> None:
     assert event.battery_level_percent == 76
 
 
+def test_validate_gps_event_strips_whitespace_from_strings() -> None:
+    payload = valid_payload()
+    payload.update(
+        {
+            "source_system": "  DRIVER_APP  ",
+            "external_event_id": "  gps-000001  ",
+            "driver_code": "  DRV1027  ",
+            "vehicle_code": "  VH-4412  ",
+        }
+    )
+
+    event = validate_gps_event(payload)
+
+    assert event.source_system == "DRIVER_APP"
+    assert event.external_event_id == "gps-000001"
+    assert event.driver_code == "DRV1027"
+    assert event.vehicle_code == "VH-4412"
+
+
 @pytest.mark.parametrize(
     ("field_name", "bad_value"),
     [
         ("event_type", "ORDER_CREATED"),
+        ("source_system", ""),
+        ("external_event_id", ""),
         ("driver_code", ""),
         ("vehicle_code", ""),
         ("latitude", -90.1),
@@ -73,6 +94,33 @@ def test_validate_gps_event_rejects_invalid_values(
 
     with pytest.raises(ValidationError):
         validate_gps_event(payload)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value"),
+    [
+        ("latitude", -90.0),
+        ("latitude", 90.0),
+        ("longitude", -180.0),
+        ("longitude", 180.0),
+        ("speed_kmh", 0.0),
+        ("heading_degrees", 0),
+        ("heading_degrees", 359),
+        ("gps_accuracy_m", 0.0),
+        ("battery_level_percent", 0),
+        ("battery_level_percent", 100),
+    ],
+)
+def test_validate_gps_event_accepts_boundary_values(
+    field_name: str,
+    value: object,
+) -> None:
+    payload = valid_payload()
+    payload[field_name] = value
+
+    event = validate_gps_event(payload)
+
+    assert getattr(event, field_name) == value
 
 
 @pytest.mark.parametrize(
@@ -119,6 +167,26 @@ def test_validate_gps_event_rejects_none_for_required_numeric_fields(
         validate_gps_event(payload)
 
 
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "source_system",
+        "external_event_id",
+        "event_timestamp",
+        "driver_code",
+        "vehicle_code",
+    ],
+)
+def test_validate_gps_event_rejects_none_for_required_string_and_timestamp_fields(
+    field_name: str,
+) -> None:
+    payload = valid_payload()
+    payload[field_name] = None
+
+    with pytest.raises(ValidationError):
+        validate_gps_event(payload)
+
+
 def test_validate_gps_event_rejects_extra_fields() -> None:
     payload = valid_payload()
     payload["unexpected_field"] = "not allowed"
@@ -135,3 +203,21 @@ def test_validate_gps_event_parses_timestamp() -> None:
     assert event.event_timestamp.month == 6
     assert event.event_timestamp.day == 24
     assert event.event_timestamp.utcoffset() is not None
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        "not-a-timestamp",
+        "2026-99-99T99:99:99",
+        "",
+    ],
+)
+def test_validate_gps_event_rejects_invalid_timestamp_format(
+    timestamp: str,
+) -> None:
+    payload = valid_payload()
+    payload["event_timestamp"] = timestamp
+
+    with pytest.raises(ValidationError):
+        validate_gps_event(payload)

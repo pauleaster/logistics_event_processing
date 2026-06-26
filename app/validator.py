@@ -22,8 +22,8 @@ class GpsEvent(BaseModel):
         str_strip_whitespace=True,
     )
 
-    source_system: str
-    external_event_id: str
+    source_system: str = Field(min_length=1)
+    external_event_id: str = Field(min_length=1)
     event_type: Literal["GPS_CRUMB"]
     event_timestamp: datetime
 
