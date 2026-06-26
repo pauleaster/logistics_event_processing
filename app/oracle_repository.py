@@ -6,8 +6,6 @@ It receives a database-ready GpsRecord and calls the Oracle PL/SQL package.
 """
 
 import os
-from collections.abc import Mapping
-from typing import Any, cast
 
 import oracledb
 
@@ -48,19 +46,7 @@ class OracleGpsRepository:
             with connection.cursor() as cursor:
                 cursor.callproc( # pyright: ignore[reportUnknownMemberType]
                     "event_processing_pkg.insert_gps_crumb",
-                    [
-                        _get_field(record, "source_system"),
-                        _get_field(record, "external_event_id"),
-                        _get_field(record, "event_timestamp"),
-                        _get_field(record, "driver_code"),
-                        _get_field(record, "vehicle_code"),
-                        _get_field(record, "latitude"),
-                        _get_field(record, "longitude"),
-                        _get_field(record, "speed_kmh"),
-                        _get_field(record, "heading_degrees"),
-                        _get_field(record, "gps_accuracy_m"),
-                        _get_field(record, "battery_level_percent"),
-                    ],
+                    keyword_parameters=record.to_oracle_params(),
                 )
 
             connection.commit()
@@ -91,17 +77,3 @@ def _required_env(name: str) -> str:
         raise RuntimeError(f"Required environment variable is not set: {name}")
 
     return value
-
-
-def _get_field(record: GpsRecord, field_name: str) -> Any:
-    """
-    Read a field from a transformed GPS record.
-
-    Supports dataclass/Pydantic-style attributes and dict-like records. This keeps
-    the repository tolerant of the exact GpsRecord implementation without taking
-    ownership of transformation.
-    """
-    if isinstance(record, Mapping):
-        return cast(Any, record[field_name])
-
-    return getattr(record, field_name)
