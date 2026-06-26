@@ -128,13 +128,16 @@ def process_gps_payload(
         error_type = _classify_database_error(exc)
         error_message = _summarise_database_error(exc)
 
-        logger.exception(
+        logger.error(
             "gps_event_database_failed",
             extra={
                 "event_hash": event_hash,
+                "source_system": record.source_system,
                 "external_event_id": record.external_event_id,
                 "driver_code": record.driver_code,
                 "vehicle_code": record.vehicle_code,
+                "stage": "oracle_insert",
+                "status": "failed",
                 "error_type": error_type,
                 "error_message": error_message,
             },

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import logging
+from unittest.mock import patch
 
 import oracledb
+from pytest import LogCaptureFixture
 
 from app.event_processor import ProcessingStatus, process_gps_payload
 from app.transformer import GpsRecord
@@ -154,3 +157,67 @@ def test_process_gps_payload_handles_inactive_vehicle_database_error() -> None:
     assert result.error_type == "INACTIVE_VEHICLE"
     assert result.error_message is not None
     assert result.should_ack is False
+
+
+def test_process_gps_payload_database_error_logs_without_traceback(
+    caplog: LogCaptureFixture,
+) -> None:
+    repository = FailingDatabaseRepository(
+        message=(
+            "ORA-20005: Duplicate GPS event for "
+            "source_system/external_event_id: DRIVER_APP/gps-000001\n"
+            'ORA-06512: at "LOGISTICS.EVENT_PROCESSING_PKG", line 91\n'
+            "ORA-06512: at line 1"
+        )
+    )
+
+    with caplog.at_level(logging.ERROR, logger="app.event_processor"):
+        result = process_gps_payload(_valid_payload(), repository)
+
+    assert result.success is False
+    assert result.status == ProcessingStatus.FAILED_DATABASE
+    assert result.error_type == "DUPLICATE_GPS_EVENT"
+    assert result.error_message == (
+        "ORA-20005: Duplicate GPS event for "
+        "source_system/external_event_id: DRIVER_APP/gps-000001"
+    )
+    assert result.should_ack is False
+
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+
+    assert record.message == "gps_event_database_failed"
+    assert record.exc_info is None
+    assert getattr(record, "source_system") == "DRIVER_APP"
+    assert getattr(record, "external_event_id") == "evt-001"
+    assert getattr(record, "event_hash") is not None
+    assert getattr(record, "stage") == "oracle_insert"
+    assert getattr(record, "status") == "failed"
+    assert getattr(record, "error_type") == "DUPLICATE_GPS_EVENT"
+    assert getattr(record, "error_message") == (
+        "ORA-20005: Duplicate GPS event for "
+        "source_system/external_event_id: DRIVER_APP/gps-000001"
+    )
+
+
+def test_process_gps_payload_transformation_failure_still_logs_traceback(
+    caplog: LogCaptureFixture,
+) -> None:
+    repository = SuccessfulRepository()
+
+    with patch(
+        "app.event_processor.transform_gps_event",
+        side_effect=RuntimeError("transform exploded"),
+    ), caplog.at_level(logging.ERROR, logger="app.event_processor"):
+        result = process_gps_payload(_valid_payload(), repository)
+
+    assert result.success is False
+    assert result.status == ProcessingStatus.FAILED_TRANSFORMATION
+    assert result.error_type == "RuntimeError"
+    assert result.error_message == "transform exploded"
+    assert result.should_ack is False
+
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.message == "gps_event_transformation_failed"
+    assert record.exc_info is not None

@@ -127,3 +127,22 @@ def test_handler_returns_processing_result_from_event_processor(
     assert actual_result is expected_result
     assert received_payload is payload
     assert received_repository is repository
+
+
+def test_main_configures_logging_before_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called: list[str] = []
+
+    def fake_configure_logging() -> None:
+        called.append("configure_logging")
+
+    def fake_run() -> None:
+        called.append("run")
+
+    monkeypatch.setattr(main_module, "configure_logging", fake_configure_logging)
+    monkeypatch.setattr(main_module, "run", fake_run)
+
+    main_module.main()
+
+    assert called == ["configure_logging", "run"]
