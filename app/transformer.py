@@ -9,7 +9,7 @@ Raw payloads and invalid events are intentionally not persisted here.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 
 from app.validator import GpsEvent
@@ -73,7 +73,7 @@ def transform_gps_event(event: GpsEvent) -> GpsRecord:
     return GpsRecord(
         source_system=event.source_system,
         external_event_id=event.external_event_id,
-        event_timestamp=event.event_timestamp,
+        event_timestamp=event.event_timestamp.astimezone(UTC).replace(tzinfo=None),
         driver_code=event.driver_code,
         vehicle_code=event.vehicle_code,
         latitude=event.latitude,
