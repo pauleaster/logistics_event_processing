@@ -131,6 +131,93 @@ def consume_json_events(
             connection.close()
 
 
+def consume_json_events_until(
+    *,
+    config: RabbitMqConfig,
+    handler: Callable[[JsonObject], MessageHandlingResult],
+    max_messages: int,
+) -> int:
+    """
+    Consume JSON events from RabbitMQ until max_messages have been handled.
+
+    This is a bounded variant of consume_json_events() intended for integration
+    tests and controlled batch-style consumption. It uses the same parsing and
+    ack/reject policy as the unbounded consumer.
+    """
+    if max_messages < 1:
+        raise ValueError("max_messages must be at least 1")
+
+    credentials = pika.PlainCredentials(config.username, config.password)
+    parameters = pika.ConnectionParameters(
+        host=config.host,
+        port=config.port,
+        credentials=credentials,
+    )
+
+    connection = pika.BlockingConnection(parameters)
+
+    handled_count = 0
+
+    try:
+        channel = connection.channel()
+        channel.queue_declare(  # pyright: ignore[reportUnknownMemberType]
+            queue=config.queue_name,
+            durable=True,
+        )
+
+        while handled_count < max_messages:
+            raw_get = cast(
+                object,
+                channel.basic_get(  # pyright: ignore[reportUnknownMemberType]
+                    queue=config.queue_name,
+                    auto_ack=False,
+                ),
+            )
+            method_frame, _properties, body = cast(
+                tuple[object | None, object, bytes],
+                raw_get,
+            )
+
+            if method_frame is None:
+                break
+
+            delivery_tag = _get_delivery_tag(method_frame)
+
+            try:
+                payload = _parse_message_body(body)
+                result = handler(payload)
+
+                if result.should_ack:
+                    _basic_ack(channel, delivery_tag=delivery_tag)
+                else:
+                    _basic_reject(
+                        channel,
+                        delivery_tag=delivery_tag,
+                        requeue=False,
+                    )
+
+            except RabbitMqMessageError:
+                _basic_reject(
+                    channel,
+                    delivery_tag=delivery_tag,
+                    requeue=False,
+                )
+            except Exception:
+                logger.exception("Unhandled error while handling RabbitMQ message")
+                _basic_reject(
+                    channel,
+                    delivery_tag=delivery_tag,
+                    requeue=False,
+                )
+
+            handled_count += 1
+
+        return handled_count
+
+    finally:
+        connection.close()
+
+
 def _parse_message_body(body: bytes) -> JsonObject:
     """
     Decode and parse a RabbitMQ message body as a JSON object.
