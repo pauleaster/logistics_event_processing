@@ -57,6 +57,41 @@ def test_transform_gps_event_converts_event_timestamp_to_utc_naive_datetime() ->
     assert record.event_timestamp.tzinfo is None
 
 
+def test_transform_gps_event_preserves_utc_timestamp_as_utc_naive() -> None:
+    payload = valid_gps_payload()
+    payload["event_timestamp"] = "2026-06-25T00:15:30+00:00"
+
+    event = validate_gps_event(payload)
+    record = transform_gps_event(event)
+
+    assert record.event_timestamp == datetime(2026, 6, 25, 0, 15, 30)
+    assert record.event_timestamp.tzinfo is None
+
+
+def test_transform_gps_event_preserves_numeric_zero_values() -> None:
+    payload = valid_gps_payload()
+    payload.update(
+        {
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "speed_kmh": 0.0,
+            "heading_degrees": 0,
+            "gps_accuracy_m": 0.0,
+            "battery_level_percent": 0,
+        }
+    )
+
+    event = validate_gps_event(payload)
+    record = transform_gps_event(event)
+
+    assert record.latitude == 0.0
+    assert record.longitude == 0.0
+    assert record.speed_kmh == 0.0
+    assert record.heading_degrees == 0
+    assert record.gps_accuracy_m == 0.0
+    assert record.battery_level_percent == 0
+
+
 def test_transform_gps_event_does_not_include_event_type_in_oracle_params() -> None:
     payload = valid_gps_payload()
 
