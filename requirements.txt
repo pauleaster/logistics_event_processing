@@ -3,3 +3,4 @@
 oracledb==4.0.1
 pytest==9.1.1
 pydantic==2.13.4
+pika==1.4.1

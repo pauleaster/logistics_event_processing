@@ -136,6 +136,7 @@ logistics_event_processing/
 17. Add error handling for invalid payloads and PL/SQL/database errors.
 18. Add RabbitMQ producer using `pika`.
 19. Add RabbitMQ consumer using `pika`.
+19a. Add integration test to test producer -> consumer
 20. Connect consumer -> validation -> transformation -> Oracle repository.
 21. Add pytest unit tests for validator, transformer, and repository behaviour, covering happy paths and edge cases.
 22. Add additional pytest integration tests only where real Oracle behaviour needs to be verified.
