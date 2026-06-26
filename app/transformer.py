@@ -69,6 +69,9 @@ def transform_gps_event(event: GpsEvent) -> GpsRecord:
     The input must already have passed Pydantic validation. This function does
     not revalidate business rules; it only removes validation-only fields and
     prepares the persistence shape.
+
+    Event timestamps are normalised to UTC and made timezone-naive because the
+    Oracle GPS table stores event timestamps as plain TIMESTAMP values.
     """
     return GpsRecord(
         source_system=event.source_system,
