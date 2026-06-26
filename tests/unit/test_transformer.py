@@ -46,14 +46,15 @@ def test_transform_gps_event_returns_gps_record() -> None:
     assert record.battery_level_percent == 76
 
 
-def test_transform_gps_event_preserves_datetime_object() -> None:
+def test_transform_gps_event_converts_event_timestamp_to_utc_naive_datetime() -> None:
     payload = valid_gps_payload()
 
     event = validate_gps_event(payload)
     record = transform_gps_event(event)
 
     assert isinstance(record.event_timestamp, datetime)
-    assert record.event_timestamp.utcoffset() == timedelta(hours=10)
+    assert record.event_timestamp == datetime(2026, 6, 23, 23, 15, 30)
+    assert record.event_timestamp.tzinfo is None
 
 
 def test_transform_gps_event_does_not_include_event_type_in_oracle_params() -> None:
