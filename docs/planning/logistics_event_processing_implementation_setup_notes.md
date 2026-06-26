@@ -141,7 +141,7 @@ logistics_event_processing/
 21. Add pytest unit tests for validator, transformer, and repository behaviour, covering happy paths and edge cases.
 22. Add additional pytest integration tests only where real Oracle behaviour needs to be verified.
 23. Add end-to-end happy-path test for sample JSONL -> RabbitMQ -> consumer -> Oracle.
-24. Add pandas summary report.
+24. Add pandas report that summarises processed GPS records from Oracle.
 25. Update README run commands.
 26. Update `presentation.md` in parallel.
 
