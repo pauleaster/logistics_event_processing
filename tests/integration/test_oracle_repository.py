@@ -63,7 +63,6 @@ class GpsEventDict(TypedDict):
 class InsertedGpsRow(TypedDict):
     source_system: str
     external_event_id: str
-    event_type: str
     event_timestamp: datetime
     driver_code: str
     vehicle_code: str
@@ -151,16 +150,14 @@ def test_valid_gps_event_is_validated_transformed_and_inserted_into_oracle(
     """
 
     from app.oracle_repository import OracleGpsRepository
-    from app.transformer import to_gps_crumb_record
+    from app.transformer import transform_gps_event
     from app.validator import validate_gps_event
 
-    validated_event = validate_gps_event(VALID_GPS_EVENT)
-    gps_crumb_record = to_gps_crumb_record(validated_event)
+    validated_event = validate_gps_event(dict(VALID_GPS_EVENT))
+    gps_crumb_record = transform_gps_event(validated_event)
 
-    repository = OracleGpsRepository(oracle_connection)
-    repository.insert_gps_crumb(gps_crumb_record)
-
-    oracle_connection.commit()
+    repository = OracleGpsRepository()
+    repository.insert_gps_record(gps_crumb_record)
 
     inserted_row = _fetch_inserted_gps_row(
         oracle_connection,
@@ -174,7 +171,6 @@ def test_valid_gps_event_is_validated_transformed_and_inserted_into_oracle(
 
     assert inserted_row["source_system"] == VALID_GPS_EVENT["source_system"]
     assert inserted_row["external_event_id"] == VALID_GPS_EVENT["external_event_id"]
-    assert inserted_row["event_type"] == VALID_GPS_EVENT["event_type"]
 
     assert _to_float(inserted_row["latitude"]) == pytest.approx(
         VALID_GPS_EVENT["latitude"]
@@ -209,7 +205,6 @@ def _fetch_inserted_gps_row(
             select
                 g.source_system,
                 g.external_event_id,
-                g.event_type,
                 g.event_timestamp,
                 d.driver_code,
                 v.vehicle_code,
