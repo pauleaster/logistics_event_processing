@@ -1,5 +1,19 @@
 # Oracle Docker Install Notes
 
+## Preferred path now: Docker Compose
+
+Use Docker Compose as the primary way to start Oracle and RabbitMQ for this project.
+
+From the project root:
+
+```bash
+docker compose up -d oracle rabbitmq
+```
+
+The Compose definitions are now the source of truth for container creation/startup.
+
+This file keeps the previous manual `docker run` commands as reference/troubleshooting notes.
+
 ## Purpose
 
 Install and run Oracle Database Free locally in Docker for the logistics event processing application. The Python application will use Oracle as the database layer and call Oracle PL/SQL through `python-oracledb`.
@@ -58,6 +72,8 @@ docker run -d \
   -e ORACLE_PWD="$ORACLE_ADMIN_PASSWORD" \
   container-registry.oracle.com/database/free:latest
 ```
+
+Manual reference only. Preferred startup is via `docker compose up -d oracle rabbitmq`.
 
 ## Check container status
 
@@ -120,6 +136,12 @@ Restart the existing Oracle container:
 docker start logistics-oracle
 ```
 
+Compose equivalent:
+
+```bash
+docker compose start oracle
+```
+
 Follow startup logs:
 
 ```bash
@@ -163,7 +185,9 @@ python-oracledb
 
 ## Docker Compose note
 
-A `docker-compose.yml` can replace the manual `docker run` command once the basic Oracle setup is working. First get the manual container path working, then move it into Compose.
+Compose is now implemented and is the recommended startup workflow.
+
+Use this file's manual commands as fallback/reference only.
 
 ## Runtime expectation
 

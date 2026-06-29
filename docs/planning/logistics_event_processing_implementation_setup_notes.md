@@ -28,6 +28,14 @@ docker system df
 
 Avoid aggressive cleanup unless old images are definitely no longer needed.
 
+## Compose-first local runtime
+
+- Use `docker-compose.yml` as the source of truth for local Oracle, RabbitMQ, and Python app/test runtime.
+- Start local infra with `docker compose up -d oracle rabbitmq`.
+- Build app image with `docker compose build app`.
+- Run tests in container with `docker compose run --rm app pytest tests/unit` and `docker compose run --rm app pytest tests/integration`.
+- Keep manual `docker run` instructions only as fallback/reference notes.
+
 ## Oracle setup approach
 
 - Use Oracle in Docker / Docker Compose on the local development PC.
@@ -147,7 +155,7 @@ logistics_event_processing/
 24c. Add integration and unit test for producer.publish_events
 24d. Add code for producer.publish_events
 24e. Add script to generate time based gps data 
-25. Update README run commands.
+25. Containerise the remaining code, update README run commands.
 26. Update `presentation.md` in parallel.
 
 ## Testing approach
