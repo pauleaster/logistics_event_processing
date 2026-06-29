@@ -144,8 +144,9 @@ logistics_event_processing/
 24. Add pandas report that summarises processed GPS records from Oracle.
 24a. Log database failures without tracebacks
 24b. Change producer into a class
-24c. Add call for publish_events
-24d. Add script to generate time based gps data 
+24c. Add integration and unit test for producer.publish_events
+24d. Add code for producer.publish_events
+24e. Add script to generate time based gps data 
 25. Update README run commands.
 26. Update `presentation.md` in parallel.
 
