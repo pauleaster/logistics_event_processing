@@ -142,6 +142,10 @@ logistics_event_processing/
 22. Add additional pytest integration tests only where real Oracle behaviour needs to be verified.
 23. Add end-to-end happy-path test for sample JSONL -> RabbitMQ -> consumer -> Oracle.
 24. Add pandas report that summarises processed GPS records from Oracle.
+24a. Log database failures without tracebacks
+24b. Change producer into a class
+24c. Add call for publish_events
+24d. Add script to generate time based gps data 
 25. Update README run commands.
 26. Update `presentation.md` in parallel.
 
