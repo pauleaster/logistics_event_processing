@@ -14,7 +14,7 @@ messages. Those responsibilities belong to later pipeline stages.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import cast
 
@@ -55,7 +55,17 @@ class Producer:
         """
 
         events = list(read_jsonl_events(jsonl_path))
-        return self._publish_events(events)
+        return self.publish_events(events)
+
+    def publish_events(self, events: JsonObject | Iterable[JsonObject]) -> int:
+        events_to_publish: list[JsonObject]
+
+        if isinstance(events, dict):
+            events_to_publish = [cast(JsonObject, events)]
+        else:
+            events_to_publish = list(events)
+
+        return self._publish_events(events_to_publish)
 
     def _publish_events(self, events: list[JsonObject]) -> int:
         config = self._config
