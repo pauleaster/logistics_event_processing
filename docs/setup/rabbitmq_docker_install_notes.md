@@ -1,5 +1,19 @@
 # RabbitMQ Docker Install Notes
 
+## Preferred path now: Docker Compose
+
+Use Docker Compose as the primary way to start RabbitMQ and Oracle for this project.
+
+From the project root:
+
+```bash
+docker compose up -d oracle rabbitmq
+```
+
+The Compose definitions are now the source of truth for container creation/startup.
+
+This file keeps the previous manual `docker run` commands as reference/troubleshooting notes.
+
 ## Purpose
 
 Install and run RabbitMQ locally in Docker for the logistics event processing application. RabbitMQ will provide the message queue layer between the synthetic event producer and the Python consumer.
@@ -73,6 +87,8 @@ docker run -d \
   rabbitmq:3-management
 ```
 
+Manual reference only. Preferred startup is via `docker compose up -d oracle rabbitmq`.
+
 ## Check container status
 
 ```bash
@@ -131,6 +147,12 @@ Restart the existing RabbitMQ container:
 
 ```bash
 docker start logistics-rabbitmq
+```
+
+Compose equivalent:
+
+```bash
+docker compose start rabbitmq
 ```
 
 Follow startup logs:
@@ -241,16 +263,9 @@ docker rm -f logistics-rabbitmq
 
 ## Docker Compose note
 
-A `docker-compose.yml` can replace the manual `docker run` command once the basic RabbitMQ and Oracle containers are both working.
+Compose is now implemented and is the recommended startup workflow.
 
-The eventual Compose setup should include:
-
-```text
-oracle
-rabbitmq
-```
-
-The Python app can continue running from WSL during development.
+Use this file's manual commands as fallback/reference only.
 
 ## Runtime expectation
 

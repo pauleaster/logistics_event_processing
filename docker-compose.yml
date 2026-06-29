@@ -1,0 +1,46 @@
+services:
+  oracle:
+    image: container-registry.oracle.com/database/free:latest
+    container_name: logistics-oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PWD: ${ORACLE_ADMIN_PASSWORD:-oracle_admin_password_change_me}
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: logistics-rabbitmq
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-logistics}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq_password_change_me}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: logistics-event-processing-app:local
+    working_dir: /workspace
+    depends_on:
+      - oracle
+      - rabbitmq
+    environment:
+      RABBITMQ_USER: ${RABBITMQ_USER:-logistics}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rabbitmq_password_change_me}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_QUEUE: ${RABBITMQ_QUEUE:-logistics_events}
+      LOGISTICS_DB_USER: ${LOGISTICS_DB_USER:-logistics}
+      LOGISTICS_DB_PASSWORD: ${LOGISTICS_DB_PASSWORD:-logistics_password_change_me}
+      ORACLE_DSN: oracle:1521/FREEPDB1
+      PYTHONUNBUFFERED: "1"
+
+volumes:
+  oracle_data:
+  rabbitmq_data:
