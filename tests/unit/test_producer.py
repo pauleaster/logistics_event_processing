@@ -6,7 +6,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from app.producer import JsonlEventError, publish_jsonl_events, read_jsonl_events
+import app.producer as producer_module
+from app.producer import (
+    JsonlEventError,
+    Producer,
+    publish_jsonl_events,
+    read_jsonl_events,
+)
 from app.rabbitmq_config import RabbitMqConfig
 
 
@@ -67,7 +73,7 @@ def test_read_jsonl_events_raises_clear_error_for_non_object_json(
 
 
 @patch("app.producer.pika.BlockingConnection")
-def test_publish_jsonl_events_declares_durable_queue_and_publishes_messages(
+def test_producer_publish_jsonl_events_declares_durable_queue_and_publishes_messages(
     blocking_connection_mock: Mock,
     tmp_path: Path,
     rabbitmq_config: RabbitMqConfig,
@@ -86,10 +92,8 @@ def test_publish_jsonl_events_declares_durable_queue_and_publishes_messages(
     blocking_connection_mock.return_value = connection_mock
     connection_mock.channel.return_value = channel_mock
 
-    published_count = publish_jsonl_events(
-        jsonl_path=jsonl_path,
-        config=rabbitmq_config,
-    )
+    producer = Producer(rabbitmq_config)
+    published_count = producer.publish_jsonl_events(jsonl_path=jsonl_path)
 
     assert published_count == 2
 
@@ -118,6 +122,30 @@ def test_publish_jsonl_events_declares_durable_queue_and_publishes_messages(
     }
 
     connection_mock.close.assert_called_once_with()
+
+
+def test_publish_jsonl_events_wrapper_delegates_to_producer_class(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    rabbitmq_config: RabbitMqConfig,
+) -> None:
+    jsonl_path = tmp_path / "events.jsonl"
+    jsonl_path.write_text('{"external_event_id": "gps-001"}\n', encoding="utf-8")
+
+    producer_mock = Mock()
+    producer_mock.publish_jsonl_events.return_value = 123
+
+    producer_class_mock = Mock(return_value=producer_mock)
+    monkeypatch.setattr(producer_module, "Producer", producer_class_mock)
+
+    published_count = publish_jsonl_events(
+        jsonl_path=jsonl_path,
+        config=rabbitmq_config,
+    )
+
+    assert published_count == 123
+    producer_class_mock.assert_called_once_with(rabbitmq_config)
+    producer_mock.publish_jsonl_events.assert_called_once_with(jsonl_path)
 
 
 @patch("app.producer.pika.BlockingConnection")
