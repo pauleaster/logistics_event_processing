@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Protocol, cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -14,6 +15,14 @@ from app.producer import (
     read_jsonl_events,
 )
 from app.rabbitmq_config import RabbitMqConfig
+
+
+JsonObject = dict[str, object]
+
+
+class _ProducerWithPublishEvents(Protocol):
+    def publish_events(self, events: JsonObject | list[JsonObject]) -> int:
+        ...
 
 
 @pytest.fixture
@@ -168,3 +177,89 @@ def test_publish_jsonl_events_does_not_connect_when_jsonl_is_malformed(
         )
 
     blocking_connection_mock.assert_not_called()
+
+
+@patch("app.producer.pika.BlockingConnection")
+def test_producer_publish_events_publishes_single_event(
+    blocking_connection_mock: Mock,
+    rabbitmq_config: RabbitMqConfig,
+) -> None:
+    connection_mock = Mock()
+    channel_mock = Mock()
+
+    blocking_connection_mock.return_value = connection_mock
+    connection_mock.channel.return_value = channel_mock
+
+    producer = Producer(rabbitmq_config)
+
+    event: JsonObject = {
+        "external_event_id": "gps-001",
+        "source_system": "DRIVER_APP",
+    }
+
+    published_count = cast(_ProducerWithPublishEvents, producer).publish_events(event)
+
+    assert published_count == 1
+
+    channel_mock.queue_declare.assert_called_once_with(
+        queue="gps_events",
+        durable=True,
+    )
+
+    channel_mock.basic_publish.assert_called_once()
+
+    first_call = channel_mock.basic_publish.call_args_list[0]
+    assert first_call.kwargs["exchange"] == ""
+    assert first_call.kwargs["routing_key"] == "gps_events"
+    assert json.loads(first_call.kwargs["body"].decode("utf-8")) == event
+
+    connection_mock.close.assert_called_once_with()
+
+
+@patch("app.producer.pika.BlockingConnection")
+def test_producer_publish_events_publishes_multiple_events(
+    blocking_connection_mock: Mock,
+    rabbitmq_config: RabbitMqConfig,
+) -> None:
+    connection_mock = Mock()
+    channel_mock = Mock()
+
+    blocking_connection_mock.return_value = connection_mock
+    connection_mock.channel.return_value = channel_mock
+
+    producer = Producer(rabbitmq_config)
+
+    events: list[JsonObject] = [
+        {
+            "external_event_id": "gps-001",
+            "source_system": "DRIVER_APP",
+        },
+        {
+            "external_event_id": "gps-002",
+            "source_system": "DRIVER_APP",
+        },
+    ]
+
+    published_count = cast(_ProducerWithPublishEvents, producer).publish_events(events)
+
+    assert published_count == 2
+
+    channel_mock.queue_declare.assert_called_once_with(
+        queue="gps_events",
+        durable=True,
+    )
+
+    assert channel_mock.basic_publish.call_count == 2
+
+    first_call = channel_mock.basic_publish.call_args_list[0]
+    second_call = channel_mock.basic_publish.call_args_list[1]
+
+    assert first_call.kwargs["exchange"] == ""
+    assert first_call.kwargs["routing_key"] == "gps_events"
+    assert second_call.kwargs["exchange"] == ""
+    assert second_call.kwargs["routing_key"] == "gps_events"
+
+    assert json.loads(first_call.kwargs["body"].decode("utf-8")) == events[0]
+    assert json.loads(second_call.kwargs["body"].decode("utf-8")) == events[1]
+
+    connection_mock.close.assert_called_once_with()
