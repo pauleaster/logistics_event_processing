@@ -118,12 +118,12 @@ exit
 Connect as SYSTEM and create the application schema/user from the shell variables:
 
 ```bash
-docker exec -i logistics-oracle sqlplus system/"$ORACLE_ADMIN_PASSWORD"@FREEPDB1 <<SQL
+docker exec -i logistics-oracle sqlplus system/"$ORACLE_ADMIN_PASSWORD"@FREEPDB1 <<EOF
 CREATE USER $LOGISTICS_DB_USER IDENTIFIED BY "$LOGISTICS_DB_PASSWORD";
 GRANT CONNECT, RESOURCE TO $LOGISTICS_DB_USER;
 ALTER USER $LOGISTICS_DB_USER QUOTA UNLIMITED ON USERS;
 EXIT;
-SQL
+EOF
 ```
 
 ## Stop and restart Oracle container

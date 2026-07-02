@@ -110,12 +110,12 @@ Then create application user (if needed):
 ```bash
 source set_env_vars.sh
 
-docker exec -i logistics-oracle sqlplus system/"$ORACLE_ADMIN_PASSWORD"@FREEPDB1 <<SQL
+docker exec -i logistics-oracle sqlplus system/"$ORACLE_ADMIN_PASSWORD"@FREEPDB1 <<EOF
 CREATE USER $LOGISTICS_DB_USER IDENTIFIED BY "$LOGISTICS_DB_PASSWORD";
 GRANT CONNECT, RESOURCE TO $LOGISTICS_DB_USER;
 ALTER USER $LOGISTICS_DB_USER QUOTA UNLIMITED ON USERS;
 EXIT;
-SQL
+EOF
 ```
 
 This user-creation block is only for a fresh Oracle volume. If the user/schema already exists, skip user creation and reapply only the SQL scripts you need.
@@ -130,4 +130,56 @@ docker exec -i logistics-oracle sqlplus "$LOGISTICS_DB_USER"/"$LOGISTICS_DB_PASS
 docker exec -i logistics-oracle sqlplus "$LOGISTICS_DB_USER"/"$LOGISTICS_DB_PASSWORD"@FREEPDB1 < oracle/seed.sql
 ```
 
-This keeps startup reliable and explicit for interview/demo use.
+This keeps startup reliable and explicit for demo use.
+
+## Live proof workflow (matches presentation and reboot runbook)
+
+Terminal 1: start Oracle and RabbitMQ, then wait for Oracle readiness.
+
+```bash
+cd ~/repos/logistics/logistics_event_processing
+source set_env_vars.sh
+docker compose up -d oracle rabbitmq
+docker logs -f logistics-oracle
+```
+
+Terminal 1 (reuse): build, run tests, then start the consumer.
+
+```bash
+cd ~/repos/logistics/logistics_event_processing
+source set_env_vars.sh
+docker compose build app
+docker compose run --rm app pytest tests/unit
+docker compose run --rm app pytest tests/integration
+docker compose run --rm app python -m app.main
+```
+
+Terminal 2: publish synthetic GPS events.
+
+```bash
+cd ~/repos/logistics/logistics_event_processing
+source set_env_vars.sh
+docker compose run --rm app python scripts/publish_synthetic_gps_events.py
+```
+
+Terminal 3: show the latest 10 producer hashes from Oracle, with newest at the bottom.
+
+```bash
+cd ~/repos/logistics/logistics_event_processing
+source set_env_vars.sh
+docker exec -i logistics-oracle sqlplus "$LOGISTICS_DB_USER/$LOGISTICS_DB_PASSWORD@FREEPDB1" <<EOF
+SET LINESIZE 220
+SET PAGESIZE 50
+COLUMN producer_event_id FORMAT A16
+SELECT producer_event_id
+FROM (
+  SELECT external_event_id AS producer_event_id,
+         created_at
+  FROM gps
+  ORDER BY created_at DESC
+  FETCH FIRST 10 ROWS ONLY
+) recent
+ORDER BY created_at ASC;
+EXIT;
+EOF
+```

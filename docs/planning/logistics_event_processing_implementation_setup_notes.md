@@ -10,9 +10,7 @@
 
 ## Disk-space notes
 
-- Ubuntu WSL VHDX observed size: ~64 GB.
-- Docker data VHDX observed size: ~48 GB.
-- C: free space observed: ~71 GB.
+- Ensure sufficient free disk space before pulling Oracle and RabbitMQ images.
 - Oracle and RabbitMQ should be run in Docker rather than installed directly into WSL.
 - Avoid installing Oracle both directly in WSL and in Docker.
 
@@ -156,7 +154,7 @@ logistics_event_processing/
 24d. Add code for producer.publish_events
 24e. Add script to generate time based gps data 
 25. Containerise the remaining code, update README run commands.
-26. Update `presentation.md` in parallel.
+26. Update `presentation.md` and `README.md`.
 
 ## Testing approach
 
