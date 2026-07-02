@@ -226,7 +226,7 @@ RABBITMQ_QUEUE
 Create a quick temporary check once the project environment is ready:
 
 ```bash
-python - <<'PY'
+python - <<'EOF'
 import os
 import pika
 
@@ -250,7 +250,7 @@ channel.queue_declare(queue=queue_name, durable=True)
 print(f"Connected to RabbitMQ and declared queue: {queue_name}")
 
 connection.close()
-PY
+EOF
 ```
 
 ## Remove RabbitMQ container
